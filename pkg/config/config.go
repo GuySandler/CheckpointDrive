@@ -49,3 +49,7 @@ func RemoveGame(name string) {
 	viper.Set("games", AppConfig.Games)
 	viper.WriteConfig()
 }
+
+func GetGames() map[string]Game {
+	return AppConfig.Games
+}

@@ -38,7 +38,7 @@ func ProcessGame(game *config.Game) error {
 	if err != nil {
 		return fmt.Errorf("failed to get file hash: %v", err)
 	}
-	if hash == game.lastHash {
+	if hash == game.LastHash {
 		return nil
 	}
 
@@ -62,8 +62,8 @@ func archiveFolder(src string, dest string) error {
 	gzipper := gzip.NewWriter(out)
 	defer gzipper.Close()
 
-	tar := tar.NewReader(gzipper)
-	defer tar.Close()
+	tw := tar.NewWriter(gzipper)
+	defer tw.Close()
 
 	return filepath.Walk(src, func(file string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
@@ -78,13 +78,17 @@ func archiveFolder(src string, dest string) error {
 			return err
 		}
 		header.Name = relativePath
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+
 		if !fileInfo.IsDir() {
 			data, err := os.Open(file)
 			if err != nil {
 				return err
 			}
 			defer data.Close()
-			if _, err := io.Copy(tar, data); err != nil {
+			if _, err := io.Copy(tw, data); err != nil {
 				return err
 			}
 		}
