@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -86,28 +87,79 @@ func getDriveService() (*drive.Service, error) {
 	return drive.NewService(ctx, option.WithHTTPClient(client))
 }
 
-func Upload(gameName string, filePath string) error {
+func getDriveServiceWithFolder() (*drive.Service, string, error) {
 	service, err := getDriveService()
 	if err != nil {
-		return fmt.Errorf("unable to create Drive service: %v", err)
+		return nil, "", fmt.Errorf("unable to create Drive service: %v", err)
 	}
 
-	folderId := ""
 	query := "name='CheckpointDrive' and mimeType='application/vnd.google-apps.folder' and trashed=false"
 	result, err := service.Files.List().Q(query).Do()
 	if err != nil {
-		return fmt.Errorf("unable to search for CheckpointDrive folder: %v", err)
+		return nil, "", fmt.Errorf("unable to search for CheckpointDrive folder: %v", err)
 	}
 
 	if len(result.Files) == 0 {
 		folder := &drive.File{Name: "CheckpointDrive", MimeType: "application/vnd.google-apps.folder"}
 		createdFolder, err := service.Files.Create(folder).Do()
 		if err != nil {
-			return fmt.Errorf("unable to create CheckpointDrive folder: %v", err)
+			return nil, "", fmt.Errorf("unable to create CheckpointDrive folder: %v", err)
 		}
-		folderId = createdFolder.Id
-	} else {
-		folderId = result.Files[0].Id
+		return service, createdFolder.Id, nil
+	}
+	return service, result.Files[0].Id, nil
+}
+
+func GetFileInfo(gameName string) (fileID string, modifiedTime string, exists bool, err error) {
+	service, folderId, err := getDriveServiceWithFolder()
+	if err != nil {
+		return "", "", false, err
+	}
+
+	escapedName := strings.ReplaceAll(gameName, "'", "\\'")
+	result, err := service.Files.List().
+		Fields("files(id,modifiedTime)").
+		Q(fmt.Sprintf("name='%s' and '%s' in parents and trashed=false", escapedName, folderId)).
+		Do()
+	if err != nil {
+		return "", "", false, fmt.Errorf("unable to search for file: %v", err)
+	}
+
+	if len(result.Files) == 0 {
+		return "", "", false, nil
+	}
+	return result.Files[0].Id, result.Files[0].ModifiedTime, true, nil
+}
+
+func Download(fileID string, destPath string) error {
+	service, _, err := getDriveServiceWithFolder()
+	if err != nil {
+		return err
+	}
+
+	resp, err := service.Files.Get(fileID).Download()
+	if err != nil {
+		return fmt.Errorf("unable to download file: %v", err)
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("unable to create destination file: %v", err)
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write downloaded file: %v", err)
+	}
+	return nil
+}
+
+func Upload(gameName string, filePath string) error {
+	service, folderId, err := getDriveServiceWithFolder()
+	if err != nil {
+		return err
 	}
 
 	file, err := os.Open(filePath)

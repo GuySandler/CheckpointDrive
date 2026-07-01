@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 	Short: "CheckpointDrive is a tool to backup your game saves to Google Drive.",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("CheckpointDrive: A tool to backup your game saves to Google Drive.")
-		fmt.Println("future TUI will go here")
+		// fmt.Println("future TUI will go here")
 	},
 }
 
@@ -50,7 +50,7 @@ var removeCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		config.RemoveGame(args[0])
-		fmt.Printf("Removed game: %s", args[0])
+		fmt.Printf("Removed game: %s\n", args[0])
 	},
 }
 
@@ -109,7 +109,7 @@ var listCmd = &cobra.Command{
 			}
 			intervalInfo := ""
 			if game.Interval > 0 {
-				intervalInfo = fmt.Sprintf(" (interval: %ds)", game.Interval)
+				intervalInfo = fmt.Sprintf(" (interval: %dm)", game.Interval)
 			}
 			fmt.Printf("- %s (%s)%s%s\n", game.Name, game.Path, intervalInfo, excluded)
 		}
@@ -177,13 +177,13 @@ var configCmd = &cobra.Command{
 			}
 			switch args[1] {
 			case "daemon-interval":
-				seconds, err := strconv.Atoi(args[2])
+				minutes, err := strconv.Atoi(args[2])
 				if err != nil {
 					fmt.Printf("Invalid interval: %v\n", err)
 					return
 				}
-				config.SetDaemonInterval(seconds)
-				fmt.Printf("Daemon interval set to %d seconds\n", seconds)
+				config.SetDaemonInterval(minutes)
+				fmt.Printf("Daemon interval set to %d minutes\n", minutes)
 			default:
 				fmt.Printf("Unknown config key: %s\n", args[1])
 			}
@@ -194,7 +194,7 @@ var configCmd = &cobra.Command{
 }
 
 func main() {
-	addCmd.Flags().IntVarP(&addInterval, "interval", "i", 0, "Sync interval in seconds (0 = use daemon default)")
+	addCmd.Flags().IntVarP(&addInterval, "interval", "i", 0, "Sync interval in minutes (0 = use daemon default)")
 	addCmd.Flags().BoolVarP(&addNoDaemon, "no-daemon", "n", false, "Exclude from daemon auto-sync")
 
 	config.InitConfig()

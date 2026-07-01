@@ -22,7 +22,7 @@ var AppConfig struct {
 	DaemonInterval int             `mapstructure:"daemon_interval"`
 }
 
-const DefaultDaemonInterval = 300
+const DefaultDaemonInterval = 5
 
 func InitConfig() {
 	home, _ := os.UserHomeDir()
@@ -49,9 +49,9 @@ func GetDaemonInterval() int {
 	return AppConfig.DaemonInterval
 }
 
-func SetDaemonInterval(seconds int) {
-	AppConfig.DaemonInterval = seconds
-	viper.Set("daemon_interval", seconds)
+func SetDaemonInterval(minutes int) {
+	AppConfig.DaemonInterval = minutes
+	viper.Set("daemon_interval", minutes)
 	viper.WriteConfig()
 }
 

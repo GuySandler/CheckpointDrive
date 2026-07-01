@@ -54,11 +54,11 @@ func Status() error {
 
 func Run() {
 	interval := config.GetDaemonInterval()
-	fmt.Printf("CheckpointDrive daemon running (interval: %ds)\n", interval)
+	fmt.Printf("CheckpointDrive daemon running (interval: %dm)\n", interval)
 
 	for {
 		runOnce()
-		time.Sleep(time.Duration(interval) * time.Second)
+		time.Sleep(time.Duration(interval) * time.Minute)
 	}
 }
 
@@ -72,10 +72,13 @@ func runOnce() {
 
 		if game.Interval > 0 {
 			if game.LastSync != "" {
-				lastSync, err := time.Parse(time.RFC3339, game.LastSync)
+				lastSync, err := time.Parse(time.RFC3339Nano, game.LastSync)
+				if err != nil {
+					lastSync, err = time.Parse(time.RFC3339, game.LastSync)
+				}
 				if err == nil {
 					elapsed := now.Sub(lastSync)
-					if elapsed.Seconds() < float64(game.Interval) {
+					if elapsed.Minutes() < float64(game.Interval) {
 						continue
 					}
 				}
