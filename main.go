@@ -3,6 +3,7 @@ package main
 import (
 	"checkpointdrive/pkg/config"
 	"checkpointdrive/pkg/daemon"
+	"checkpointdrive/pkg/gdrive"
 	"checkpointdrive/pkg/sync"
 	"fmt"
 	"os"
@@ -141,7 +142,10 @@ var configCmd = &cobra.Command{ // TODO: better docs
 				fmt.Printf("Error opening config file: %v\n", err)
 			}
 		case "drive":
-			fmt.Println("Config drive")
+			err := gdrive.Authenticate()
+			if err != nil {
+				fmt.Printf("Error authenticating with Google Drive: %v\n", err)
+			}
 		default:
 			fmt.Println("Invalid argument. Use edit or drive.")
 		}
@@ -151,7 +155,7 @@ var configCmd = &cobra.Command{ // TODO: better docs
 func main() {
 	config.InitConfig()
 
-	rootCmd.AddCommand(addCmd, removeCmd, daemonCmd, listCmd, syncCmd)
+	rootCmd.AddCommand(addCmd, removeCmd, daemonCmd, listCmd, syncCmd, configCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Errorf("error executing command: %v", err)
