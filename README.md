@@ -1,5 +1,7 @@
 # CheckpointDrive
-A tool to let you back up and sync game files with google drive (designed for linux)
+A tool to let you back up and sync files with google drive (designed for linux)
+
+basic demo to show adding games and syncing: <video controls src="https://files.catbox.moe/lwn8bv.mp4" title="Title"></video>
 
 # How to install and use (prebuild)
 Download the [Latest Release](https://github.com/GuySandler/CheckpointDrive/releases/tag/Build2)
