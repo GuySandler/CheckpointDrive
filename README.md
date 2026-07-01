@@ -2,7 +2,7 @@
 A tool to let you back up and sync game files with google drive (designed for linux)
 
 # How to install and use (prebuild)
-Download the [Latest Release](https://github.com/GuySandler/CheckpointDrive/releases/tag/Build1)
+Download the [Latest Release](https://github.com/GuySandler/CheckpointDrive/releases/tag/Build2)
 
 add to bin:
 ```bash
