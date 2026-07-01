@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -115,8 +116,22 @@ func Upload(gameName string, filePath string) error {
 	}
 	defer file.Close()
 
-	driveFile := &drive.File{Name: gameName, Parents: []string{folderId}}
-	_, err = service.Files.Create(driveFile).Media(file).Do()
+	driveFile := &drive.File{Name: gameName}
+
+	escapedName := strings.ReplaceAll(gameName, "'", "\\'")
+	existing, err := service.Files.List().
+		Q(fmt.Sprintf("name='%s' and '%s' in parents and trashed=false", escapedName, folderId)).
+		Do()
+	if err != nil {
+		return fmt.Errorf("unable to search for existing file: %v", err)
+	}
+
+	if len(existing.Files) > 0 {
+		_, err = service.Files.Update(existing.Files[0].Id, driveFile).Media(file).Do()
+	} else {
+		driveFile.Parents = []string{folderId}
+		_, err = service.Files.Create(driveFile).Media(file).Do()
+	}
 	return err
 }
 
@@ -131,6 +146,7 @@ func Authenticate() error {
 	errCh := make(chan error)
 
 	serve := &http.Server{Addr: ":8080"}
+	defer serve.Close()
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
@@ -171,10 +187,6 @@ func Authenticate() error {
 		fmt.Println("Successfully connected to Google Drive!")
 	case err := <-errCh:
 		return err
-	}
-
-	if err := serve.Shutdown(context.Background()); err != nil {
-		return fmt.Errorf("failed to shutdown HTTP server: %v", err)
 	}
 
 	return nil

@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -22,14 +24,23 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+var addInterval int
+var addNoDaemon bool
+
 var addCmd = &cobra.Command{
 	Use:   "add [path] [name]",
 	Short: "Add a game to sync",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		game := config.Game{Path: args[0], Name: args[1], Trigger: "manual"} // TODO
+		game := config.Game{
+			Path:          args[0],
+			Name:          args[1],
+			Trigger:       "manual",
+			Interval:      addInterval,
+			DaemonExclude: addNoDaemon,
+		}
 		config.SaveGame(game)
-		fmt.Printf("Added game: %s", args[1])
+		fmt.Printf("Added game: %s\n", args[1])
 	},
 }
 
@@ -44,8 +55,8 @@ var removeCmd = &cobra.Command{
 }
 
 var daemonCmd = &cobra.Command{
-	Use:   "daemon [start, stop, restart, status]",
-	Short: "Start, stop, restart or check the status of the daemon (systemctl)",
+	Use:   "daemon [start, stop, restart, status, run]",
+	Short: "Manage the daemon (systemctl) or run the sync loop",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		switch args[0] {
@@ -73,8 +84,10 @@ var daemonCmd = &cobra.Command{
 			if err != nil {
 				fmt.Printf("Error checking daemon status: %v\n", err)
 			}
+		case "run":
+			daemon.Run()
 		default:
-			fmt.Println("Invalid argument. Use start, stop, restart or status.")
+			fmt.Println("Invalid argument. Use start, stop, restart, status or run.")
 		}
 	},
 }
@@ -90,47 +103,58 @@ var listCmd = &cobra.Command{
 		}
 		fmt.Println("Games being synced:")
 		for _, game := range games {
-			fmt.Printf("- %s (%s)\n", game.Name, game.Path)
+			excluded := ""
+			if game.DaemonExclude {
+				excluded = " [no-daemon]"
+			}
+			intervalInfo := ""
+			if game.Interval > 0 {
+				intervalInfo = fmt.Sprintf(" (interval: %ds)", game.Interval)
+			}
+			fmt.Printf("- %s (%s)%s%s\n", game.Name, game.Path, intervalInfo, excluded)
 		}
 	},
 }
 
 var syncCmd = &cobra.Command{
-	Use:   "sync [name or *]",
-	Short: "Sync a game by name or all by using *",
-	Args:  cobra.ExactArgs(1),
+	Use:   "sync [optional: names separated by commas]",
+	Short: "Sync all or spesify names (minecraft,factorio)",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		switch args[0] {
-		case "*":
+		if len(args) == 0 {
 			games := config.GetGames()
 			for _, game := range games {
 				err := sync.ProcessGame(&game)
 				if err != nil {
 					fmt.Printf("Failed to sync game %s: %v\n", game.Name, err)
-				} else {
-					fmt.Printf("Successfully synced game: %s\n", game.Name)
 				}
 			}
-		default:
-			game, exists := config.GetGames()[args[0]]
-			if !exists {
-				fmt.Printf("Game not found: %s\n", args[0])
-				return
-			}
-			err := sync.ProcessGame(&game)
-			if err != nil {
-				fmt.Printf("Failed to sync game %s: %v\n", game.Name, err)
-			} else {
-				fmt.Printf("Successfully synced game: %s\n", game.Name)
+		} else {
+			games := strings.Split(args[0], ",")
+			allGames := config.GetGames()
+			for _, name := range games {
+				game, exists := allGames[name]
+				if !exists {
+					fmt.Printf("Game not found: %s\n", name)
+					return
+				}
+				err := sync.ProcessGame(&game)
+				if err != nil {
+					fmt.Printf("Failed to sync game %s: %v\n", game.Name, err)
+				}
 			}
 		}
 	},
 }
 
-var configCmd = &cobra.Command{ // TODO: better docs
-	Use:   "config [edit, drive]",
-	Short: "config the application",
+var configCmd = &cobra.Command{
+	Use:   "config [edit, drive, set <key> <value>]",
+	Short: "Configure the application",
 	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) == 0 {
+			fmt.Println("Usage: cpd config [edit, drive, set <key> <value>]")
+			return
+		}
 		switch args[0] {
 		case "edit":
 			fmt.Println("Edit config file")
@@ -146,13 +170,33 @@ var configCmd = &cobra.Command{ // TODO: better docs
 			if err != nil {
 				fmt.Printf("Error authenticating with Google Drive: %v\n", err)
 			}
+		case "set":
+			if len(args) < 3 {
+				fmt.Println("Usage: cpd config set <key> <value>")
+				return
+			}
+			switch args[1] {
+			case "daemon-interval":
+				seconds, err := strconv.Atoi(args[2])
+				if err != nil {
+					fmt.Printf("Invalid interval: %v\n", err)
+					return
+				}
+				config.SetDaemonInterval(seconds)
+				fmt.Printf("Daemon interval set to %d seconds\n", seconds)
+			default:
+				fmt.Printf("Unknown config key: %s\n", args[1])
+			}
 		default:
-			fmt.Println("Invalid argument. Use edit or drive.")
+			fmt.Printf("Invalid argument. Use edit, drive, or set.\n")
 		}
 	},
 }
 
 func main() {
+	addCmd.Flags().IntVarP(&addInterval, "interval", "i", 0, "Sync interval in seconds (0 = use daemon default)")
+	addCmd.Flags().BoolVarP(&addNoDaemon, "no-daemon", "n", false, "Exclude from daemon auto-sync")
+
 	config.InitConfig()
 
 	rootCmd.AddCommand(addCmd, removeCmd, daemonCmd, listCmd, syncCmd, configCmd)

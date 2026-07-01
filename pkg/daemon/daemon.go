@@ -5,6 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
+
+	"checkpointdrive/pkg/config"
+	"checkpointdrive/pkg/sync"
 )
 
 const serviceName = "cpd.service"
@@ -16,10 +20,8 @@ func getServicePath() string {
 
 func Start() error {
 	servicePath := getServicePath()
-	if _, err := os.Stat(servicePath); os.IsNotExist(err) {
-		if err := installService(servicePath); err != nil {
-			return fmt.Errorf("failed to install daemon service: %v", err)
-		}
+	if err := installService(servicePath); err != nil {
+		return fmt.Errorf("failed to install daemon service: %v", err)
 	}
 
 	fmt.Println("Starting daemon service...")
@@ -43,11 +45,48 @@ func Stop() error {
 }
 
 func Status() error {
-	fmt.Println("Checking daemon status...")
 	cmd := exec.Command("systemctl", "--user", "status", serviceName)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	cmd.Run()
+	return nil
+}
+
+func Run() {
+	interval := config.GetDaemonInterval()
+	fmt.Printf("CheckpointDrive daemon running (interval: %ds)\n", interval)
+
+	for {
+		runOnce()
+		time.Sleep(time.Duration(interval) * time.Second)
+	}
+}
+
+func runOnce() {
+	games := config.GetGames()
+	now := time.Now()
+	for _, game := range games {
+		if game.DaemonExclude {
+			continue
+		}
+
+		if game.Interval > 0 {
+			if game.LastSync != "" {
+				lastSync, err := time.Parse(time.RFC3339, game.LastSync)
+				if err == nil {
+					elapsed := now.Sub(lastSync)
+					if elapsed.Seconds() < float64(game.Interval) {
+						continue
+					}
+				}
+			}
+		}
+
+		err := sync.ProcessGame(&game)
+		if err != nil {
+			fmt.Printf("Failed to sync game %s: %v\n", game.Name, err)
+		}
+	}
 }
 
 func installService(servicePath string) error {
@@ -66,7 +105,7 @@ func installService(servicePath string) error {
 Description=CheckpointDrive Daemon
 After=network.target
 [Service]
-ExecStart=%s daemon start
+ExecStart=%s daemon run
 Restart=on-failure
 [Install]
 WantedBy=default.target`,

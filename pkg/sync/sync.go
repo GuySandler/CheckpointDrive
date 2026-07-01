@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func ProcessGame(game *config.Game) error {
@@ -39,6 +40,7 @@ func ProcessGame(game *config.Game) error {
 		return fmt.Errorf("failed to get file hash: %v", err)
 	}
 	if hash == game.LastHash {
+		fmt.Printf("Already up to date: %s\n", game.Name)
 		return nil
 	}
 
@@ -47,7 +49,10 @@ func ProcessGame(game *config.Game) error {
 		return fmt.Errorf("failed to upload file: %v", err)
 	}
 
+	fmt.Printf("Uploaded: %s\n", game.Name)
+
 	game.LastHash = hash
+	game.LastSync = time.Now().UTC().Format(time.RFC3339)
 	config.SaveGame(*game)
 	return nil
 }
@@ -60,6 +65,7 @@ func archiveFolder(src string, dest string) error {
 	defer out.Close()
 
 	gzipper := gzip.NewWriter(out)
+	gzipper.ModTime = time.Time{}
 	defer gzipper.Close()
 
 	tw := tar.NewWriter(gzipper)
@@ -69,7 +75,7 @@ func archiveFolder(src string, dest string) error {
 		if err != nil {
 			return err
 		}
-		header, err := tar.FileInfoHeader(fileInfo, file)
+		header, err := tar.FileInfoHeader(fileInfo, "")
 		if err != nil {
 			return err
 		}
@@ -78,6 +84,7 @@ func archiveFolder(src string, dest string) error {
 			return err
 		}
 		header.Name = relativePath
+		header.ModTime = time.Time{}
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
@@ -87,10 +94,11 @@ func archiveFolder(src string, dest string) error {
 			if err != nil {
 				return err
 			}
-			defer data.Close()
 			if _, err := io.Copy(tw, data); err != nil {
+				data.Close()
 				return err
 			}
+			data.Close()
 		}
 		return nil
 	})

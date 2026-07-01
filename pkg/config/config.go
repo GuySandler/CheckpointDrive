@@ -8,16 +8,21 @@ import (
 )
 
 type Game struct {
-	Name     string `mapstructure:"name"`
-	Path     string `mapstructure:"path"`
-	Trigger  string `mapstructure:"trigger"`
-	Interval int    `mapstructure:"interval"`
-	LastHash string `mapstructure:"last_hash"`
+	Name          string
+	Path          string
+	Trigger       string
+	Interval      int
+	DaemonExclude bool
+	LastHash      string
+	LastSync      string
 }
 
 var AppConfig struct {
-	Games map[string]Game `mapstructure:"games"`
+	Games          map[string]Game `mapstructure:"games"`
+	DaemonInterval int             `mapstructure:"daemon_interval"`
 }
+
+const DefaultDaemonInterval = 300
 
 func InitConfig() {
 	home, _ := os.UserHomeDir()
@@ -28,11 +33,26 @@ func InitConfig() {
 	viper.SetConfigName("config")
 	viper.SetConfigType("json")
 
+	viper.SetDefault("daemon_interval", DefaultDaemonInterval)
+
 	if err := viper.ReadInConfig(); err != nil {
 		viper.Set("games", map[string]Game{})
 		viper.SafeWriteConfig()
 	}
 	viper.Unmarshal(&AppConfig)
+}
+
+func GetDaemonInterval() int {
+	if AppConfig.DaemonInterval <= 0 {
+		return DefaultDaemonInterval
+	}
+	return AppConfig.DaemonInterval
+}
+
+func SetDaemonInterval(seconds int) {
+	AppConfig.DaemonInterval = seconds
+	viper.Set("daemon_interval", seconds)
+	viper.WriteConfig()
 }
 
 func SaveGame(game Game) {
